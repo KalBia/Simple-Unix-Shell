@@ -114,20 +114,14 @@ noreturn void external_command(char **argv) {
 #ifdef STUDENT
 
     size_t l;
-    while ((l = strcspn(path, ":")) >
-           0) /* do untill we don't have more paths in PATH */
+    while ((l = strcspn(path, ":")) > 0)          /* do untill we don't have more paths in PATH */
     {
-      char *candidate = strndup(
-        path,
-        l); /* copy the first potential path (it allocates memory itself) */
-      strapp(
-        &candidate,
-        "/"); /* add '/' between path and command name (allocates itself) */
-      strapp(&candidate,
-             argv[0]); /* add command name to path (allocates itself) */
-      path += (l + 1); /* move to the next candidate path */
-      (void)execve(candidate, argv, environ); /* try to execve */
-      free(candidate); /* free the allocated memory if execve fails */
+      char *candidate = strndup(path, l);         /* copy the first potential path (it allocates memory itself) */
+      strapp(&candidate, "/");                    /* add '/' between path and command name (allocates itself) */
+      strapp(&candidate, argv[0]);                /* add command name to path (allocates itself) */
+      path += (l + 1);                            /* move to the next candidate path */
+      (void)execve(candidate, argv, environ);     /* try to execve */
+      free(candidate);                            /* free the allocated memory if execve fails */
     }
 
 #endif /* !STUDENT */
