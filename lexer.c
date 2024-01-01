@@ -12,11 +12,9 @@ void strapp(char **dstp, const char *src) {
   assert(dstp != NULL);
 
   /* if we have an empty place for string, we just duplicate the source */
-  if (*dstp == NULL)
-  {
+  if (*dstp == NULL) {
     *dstp = strdup(src);
-  }
-  else /* otherwise concatenation */
+  } else /* otherwise concatenation */
   {
     size_t s = strlen(*dstp) + strlen(src) + 1;
     *dstp = realloc(*dstp, s);

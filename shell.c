@@ -43,34 +43,30 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   token_t mode = NULL; /* T_INPUT, T_OUTPUT or NULL */
   int n = 0;           /* number of tokens after redirections are removed */
 
-  for (int i = 0; i < ntokens; i++)
-  {
+  for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
 
-    if (token[i] == T_INPUT)
-    {
+    if (token[i] == T_INPUT) {
       mode = T_INPUT;
 
       MaybeClose(inputp);
-      *inputp = Open(token[i+1], O_RDONLY, 0);
+      *inputp = Open(token[i + 1], O_RDONLY, 0);
 
       token[i] = T_NULL;
-      token[i+1] = T_NULL;
-    }
-    else if (token[i] == T_OUTPUT)
-    {
+      token[i + 1] = T_NULL;
+    } else if (token[i] == T_OUTPUT) {
       mode = T_OUTPUT;
 
       MaybeClose(outputp);
-      /* O_CREAT - create file if it does not exist 
+      /* O_CREAT - create file if it does not exist
        * O_TRUNC - if file exists, truncate it to 0 bytes aka overwrite data */
-      *outputp = Open(token[i+1], O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+      *outputp = Open(token[i + 1], O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
 
       token[i] = T_NULL;
-      token[i+1] = T_NULL;
-    }
-    else if (mode == NULL) /* redirections can be only on the end of "stage", so we count only while mode == NULL */
+      token[i + 1] = T_NULL;
+    } else if (mode == NULL) /* redirections can be only on the end of "stage",
+                                so we count only while mode == NULL */
       n++;
 
     (void)mode;
@@ -83,15 +79,11 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
 }
 
 /* DESCRIPTION:
- * Execute internal command within shell's process or execute internal/external command
- * in a subprocess.
- * We assume that it is a single command, not a pipeline
- * INPUT:
- * token_t *token - array of tokens
- * int ntokens - length of array
- * bool bg - foreground (0) or background (1)
- * OUTPUT:
- * static int - exitcode */
+ * Execute internal command within shell's process or execute internal/external
+ * command in a subprocess. We assume that it is a single command, not a
+ * pipeline INPUT: token_t *token - array of tokens int ntokens - length of
+ * array bool bg - foreground (0) or background (1) OUTPUT: static int -
+ * exitcode */
 
 static int do_job(token_t *token, int ntokens, bool bg) {
   int input = -1, output = -1;
@@ -118,8 +110,7 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     Sigprocmask(SIG_SETMASK, &mask, NULL);
     Signal(SIGTSTP, SIG_DFL);
     Signal(SIGINT, SIG_DFL);
-    if (bg)
-    {
+    if (bg) {
       Signal(SIGTTIN, SIG_DFL);
       Signal(SIGTTOU, SIG_DFL);
     }
@@ -128,17 +119,15 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     pid_t pgid = getpid();
     setpgid(pgid, pgid);
 
-    if(!bg)
+    if (!bg)
       setfgpgrp(pgid);
 
     /* file descriptors and execve */
-    if (input != -1)
-    {
+    if (input != -1) {
       Dup2(input, 0);
       Close(input);
     }
-    if (output != -1)
-    {
+    if (output != -1) {
       Dup2(output, 1);
       Close(output);
     }
@@ -147,10 +136,9 @@ static int do_job(token_t *token, int ntokens, bool bg) {
       return exitcode;
 
     external_command(token);
-  }
-  else /* parent process */
+  } else /* parent process */
   {
-    setpgid(pid, pid);  /* just to be sure */
+    setpgid(pid, pid); /* just to be sure */
     MaybeClose(&input);
     MaybeClose(&output);
 
@@ -200,23 +188,21 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
     Sigprocmask(SIG_SETMASK, mask, NULL);
     Signal(SIGTSTP, SIG_DFL);
     Signal(SIGINT, SIG_DFL);
-    if (bg)
-    {
+    if (bg) {
       Signal(SIGTTIN, SIG_DFL);
       Signal(SIGTTOU, SIG_DFL);
     }
 
-    /* set process group id - if it's first process setpgid(0,0) makes new process group */
+    /* set process group id - if it's first process setpgid(0,0) makes new
+     * process group */
     setpgid(0, pgid);
 
     /* file descriptors */
-    if (input != -1)
-    {
+    if (input != -1) {
       Dup2(input, 0);
       Close(input);
     }
-    if (output != -1)
-    {
+    if (output != -1) {
       Dup2(output, 1);
       Close(output);
     }
@@ -228,10 +214,9 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
 
     /* option 2: external command */
     external_command(token);
-  }
-  else /* parent process */
+  } else /* parent process */
   {
-    setpgid(pid, pgid);  /* just to be sure */
+    setpgid(pid, pgid); /* just to be sure */
     MaybeClose(&input);
     MaybeClose(&output);
   }
@@ -286,12 +271,12 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
 
   int nstage = 0;
   int start_stage = 0;
-  for (int i = 0; i < ntokens; i++)
-  {
+  for (int i = 0; i < ntokens; i++) {
     if (token[i] == T_PIPE) /* first and middle processes */
-    {        
+    {
       /* make process */
-      pid = do_stage(pgid, &mask, input, output, token + start_stage, nstage, bg);
+      pid =
+        do_stage(pgid, &mask, input, output, token + start_stage, nstage, bg);
       if (job == -1) /* if first process */
       {
         pgid = pid;
@@ -303,9 +288,10 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
       input = next_input;
       mkpipe(&next_input, &output);
       nstage = 0;
-      start_stage = i+1; /* new beginning of process */
-    }
-    else if (i == ntokens-1 || (i == ntokens-2 && token[ntokens-1] == T_BGJOB)) /* if last process */
+      start_stage = i + 1; /* new beginning of process */
+    } else if (i == ntokens - 1 ||
+               (i == ntokens - 2 &&
+                token[ntokens - 1] == T_BGJOB)) /* if last process */
     {
       /* close pipe that we opened in previous move */
       MaybeClose(&output);
@@ -313,11 +299,10 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
       output = -1;
 
       /* make process */
-      pid = do_stage(pgid, &mask, input, output, token + start_stage, nstage+1, bg);
+      pid = do_stage(pgid, &mask, input, output, token + start_stage,
+                     nstage + 1, bg);
       addproc(job, pid, token + start_stage);
-    }
-    else
-    {
+    } else {
       nstage++; /* count tokens in current part of pipeline */
     }
   }
@@ -377,7 +362,7 @@ static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
   ssize_t rc = write(STDOUT_FILENO, prompt, strlen(prompt));
-  (void) rc;
+  (void)rc;
 
   line[0] = '\0';
 

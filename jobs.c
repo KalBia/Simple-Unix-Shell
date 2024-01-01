@@ -21,13 +21,10 @@ static int tty_fd = -1;             /* controlling terminal file descriptor */
 static struct termios shell_tmodes; /* saved shell terminal modes */
 
 /* DESCRIPTION:
- * If child-process changes its status - finished, stopped, continued - it sends SIGCHLD to parent-process,
- * so we need to handle this case.
- * Moreover we have to check, if it changes status of the whole job.
- * INPUT:
- * int sig - just a convention
- * OUTPUT:
- * none */
+ * If child-process changes its status - finished, stopped, continued - it sends
+ * SIGCHLD to parent-process, so we need to handle this case. Moreover we have
+ * to check, if it changes status of the whole job. INPUT: int sig - just a
+ * convention OUTPUT: none */
 
 static void sigchld_handler(int sig) {
   int old_errno = errno;
@@ -37,29 +34,32 @@ static void sigchld_handler(int sig) {
    * Bury all children that finished saving their status in jobs. */
 #ifdef STUDENT
 
-  /* receive all the signals from processess 
+  /* receive all the signals from processess
    * WNOHANG - return if no more signals
    * WUNTRACED - receive stop signals
    * WCONTINUED - receive continue signals */
-  while ((pid = waitpid(WAIT_ANY, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0)
-  {
+  while ((pid = waitpid(WAIT_ANY, &status, WNOHANG | WUNTRACED | WCONTINUED)) >
+         0) {
     /* job by job */
-    for (int j = FG; j < njobmax; j++)
-    {
+    for (int j = FG; j < njobmax; j++) {
       job_t *job = &jobs[j];
       if (job->pgid == 0) /* free slot - ignore it */
         continue;
 
       /* variables to check if we need to change the job's status */
-      bool changeForRunning = false; /* Any running process? == status->RUNNING */
-      bool changeForStopped = false; /* Any stopped process? AND none running processes == status->STOPPED*/
+      bool changeForRunning =
+        false; /* Any running process? == status->RUNNING */
+      bool changeForStopped = false; /* Any stopped process? AND none running
+                                        processes == status->STOPPED*/
 
       for (int i = 0; i < job->nproc; i++) /* process by process */
       {
-        if (job->proc[i].state == FINISHED) /* we don't need to do anything with it anymore*/
+        if (job->proc[i].state ==
+            FINISHED) /* we don't need to do anything with it anymore*/
           continue;
 
-        if (job->proc[i].pid == pid) /* our process from waitpid that we need to change */
+        if (job->proc[i].pid ==
+            pid) /* our process from waitpid that we need to change */
         {
           job->proc[i].exitcode = -1; /* forewarned is forearmed */
 
@@ -67,17 +67,14 @@ static void sigchld_handler(int sig) {
           {
             job->proc[i].state = FINISHED;
             job->proc[i].exitcode = WEXITSTATUS(status);
-          }
-          else if (WIFSIGNALED(status)) /* if killed by signal */
+          } else if (WIFSIGNALED(status)) /* if killed by signal */
           {
             job->proc[i].state = FINISHED;
             job->proc[i].exitcode = WTERMSIG(status);
-          }
-          else if (WIFSTOPPED(status)) /* if stopped */
+          } else if (WIFSTOPPED(status)) /* if stopped */
           {
             job->proc[i].state = STOPPED;
-          }
-          else if (WIFCONTINUED(status)) /* if continued */
+          } else if (WIFCONTINUED(status)) /* if continued */
           {
             job->proc[i].state = RUNNING;
           }
@@ -91,9 +88,11 @@ static void sigchld_handler(int sig) {
 
       if (changeForRunning) /* we have at least one running process in job */
         job->state = RUNNING;
-      else if (changeForStopped) /* we don't have any running process in job, but at least one is stopped */
+      else if (changeForStopped) /* we don't have any running process in job,
+                                    but at least one is stopped */
         job->state = STOPPED;
-      else /* we don't have any running or stopped process == all are finished */
+      else /* we don't have any running or stopped process == all are finished
+            */
         job->state = FINISHED;
     }
   }
@@ -170,8 +169,8 @@ int addjob(pid_t pgid, int bg) {
  * none */
 
 static void deljob(job_t *job) {
-  assert(job->state == FINISHED);     /* delete only if the job is finished */
-  free(job->command);                 /* clean up */
+  assert(job->state == FINISHED); /* delete only if the job is finished */
+  free(job->command);             /* clean up */
   free(job->proc);
   job->pgid = 0;
   job->command = NULL;
@@ -188,7 +187,7 @@ static void deljob(job_t *job) {
  * none */
 
 static void movejob(int from, int to) {
-  assert(jobs[to].pgid == 0);                     /* only if the slot "to" is empty */
+  assert(jobs[to].pgid == 0); /* only if the slot "to" is empty */
   memcpy(&jobs[to], &jobs[from], sizeof(job_t));
   memset(&jobs[from], 0, sizeof(job_t));
 }
@@ -221,16 +220,16 @@ static void mkcommand(char **cmdp, char **argv) {
  * none */
 
 void addproc(int j, pid_t pid, char **argv) {
-  assert(j < njobmax);                  /* is number of job correct? */
+  assert(j < njobmax); /* is number of job correct? */
   job_t *job = &jobs[j];
 
-  int p = allocproc(j);                 /* get free index in array */
+  int p = allocproc(j); /* get free index in array */
   proc_t *proc = &job->proc[p];
   /* Initial state of a process. */
   proc->pid = pid;
   proc->state = RUNNING;
   proc->exitcode = -1;
-  mkcommand(&job->command, argv);       /* command from shell */
+  mkcommand(&job->command, argv); /* command from shell */
 }
 
 /* DESCRIPTION:
@@ -250,10 +249,9 @@ static int jobstate(int j, int *statusp) {
   /* TODO: Handle case where job has finished. */
 #ifdef STUDENT
 
-  if (state == FINISHED)
-  {
-    *statusp = exitcode(job);       /* get the job's status */
-    deljob(job);                    /* clean up the job */
+  if (state == FINISHED) {
+    *statusp = exitcode(job); /* get the job's status */
+    deljob(job);              /* clean up the job */
   }
 
   (void)exitcode;
@@ -286,7 +284,7 @@ char *jobcmd(int j) {
  * bool - success? */
 
 bool resumejob(int j, int bg, sigset_t *mask) {
-  if (j < 0) {       /* if j not given, take job with highest number */
+  if (j < 0) { /* if j not given, take job with highest number */
     for (j = njobmax - 1; j > 0 && jobs[j].state == FINISHED; j--)
       continue;
   }
@@ -305,11 +303,11 @@ bool resumejob(int j, int bg, sigset_t *mask) {
    * SIGCONT - signal to continue process */
 
   /* foreground job */
-  if (!bg)
-  {
+  if (!bg) {
     movejob(j, 0);
 
-    /* set as foreground process group (for example for cat - it would stop again immediately otherwise)*/
+    /* set as foreground process group (for example for cat - it would stop
+     * again immediately otherwise)*/
     setfgpgrp(jobs[0].pgid);
     Tcsetattr(tty_fd, 0, &shell_tmodes);
 
@@ -317,9 +315,7 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 
     msg("[%d] continue '%s'\n", j, jobcmd(0));
     (void)monitorjob(mask);
-  }
-  else
-  {
+  } else {
     Kill(-(job->pgid), SIGCONT);
     msg("[%d] continue '%s'\n", j, jobcmd(j));
   }
@@ -374,25 +370,28 @@ void watchjobs(int which) {
 
     int exitcode;
     char *cmd = NULL;
-    strapp(&cmd, jobcmd(j));              /* jobstate deletes job, so we need to remember it somewhere */
-    int status = jobstate(j, &exitcode);  /* we clean up finished jobs on the fly */
+    strapp(
+      &cmd,
+      jobcmd(
+        j)); /* jobstate deletes job, so we need to remember it somewhere */
+    int status =
+      jobstate(j, &exitcode); /* we clean up finished jobs on the fly */
 
-    if ((which == ALL) || (which == status))
-    {
+    if ((which == ALL) || (which == status)) {
       if (status == RUNNING)
         msg("[%d] running '%s'\n", j, cmd);
       else if (status == STOPPED)
         msg("[%d] suspended '%s'\n", j, cmd);
-      else
-        if (WIFEXITED(exitcode))
-          msg("[%d] exited '%s', status=%d\n", j, cmd, exitcode);
+      else if (WIFEXITED(exitcode))
+        msg("[%d] exited '%s', status=%d\n", j, cmd, exitcode);
+      else {
+        if (strcmp(cmd, "false") ==
+            0) /* only for 'false' we want to write something else - otherwise
+                  signal 1 is SIHUP */
+          msg("[%d] exited '%s', status=%d\n", j, cmd, WTERMSIG(exitcode));
         else
-        {
-          if (strcmp(cmd, "false") == 0) /* only for 'false' we want to write something else - otherwise signal 1 is SIHUP */
-            msg("[%d] exited '%s', status=%d\n", j, cmd, WTERMSIG(exitcode));
-          else
-            msg("[%d] killed '%s' by signal %d\n", j, cmd, WTERMSIG(exitcode));
-        }
+          msg("[%d] killed '%s' by signal %d\n", j, cmd, WTERMSIG(exitcode));
+      }
     }
 
     free(cmd);
@@ -422,17 +421,16 @@ int monitorjob(sigset_t *mask) {
   pid_t shell_pid = getpgrp();
   setfgpgrp(job->pgid);
 
-  /* wait untill it is finished or stopped - we clean up on the fly if finished */
+  /* wait untill it is finished or stopped - we clean up on the fly if finished
+   */
   state = jobstate(0, &exitcode);
-  while(state != FINISHED && state != STOPPED)
-  {
+  while (state != FINISHED && state != STOPPED) {
     Sigsuspend(mask);
     state = jobstate(0, &exitcode);
   }
 
   /* move to background */
-  if (state == STOPPED)
-  {
+  if (state == STOPPED) {
     int new_j = allocjob();
     movejob(0, new_j);
   }
@@ -483,8 +481,7 @@ void shutdownjobs(void) {
   /* TODO: Kill remaining jobs and wait for them to finish. */
 #ifdef STUDENT
 
-  for (int j = FG; j < njobmax; j++)
-  {
+  for (int j = FG; j < njobmax; j++) {
     job_t *job = &jobs[j];
 
     if (job->pgid == 0 || job->state == FINISHED)
@@ -497,7 +494,7 @@ void shutdownjobs(void) {
     (void)killjob(j);
 
     /* we don't need to use jobstate-loop here, 'casuse we do watchjobs later*/
-    while (job->state != FINISHED) 
+    while (job->state != FINISHED)
       Sigsuspend(&mask);
 
     if (j > FG)
