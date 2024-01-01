@@ -70,9 +70,8 @@ static int do_bg(char **argv) {
 }
 
 /*
- * Make stopped background job running.
- * 'bg' choose highest numbered job
- * 'bg n' choose job number n
+ * Kill given process n
+ * n - number of process
  */
 static int do_kill(char **argv) {
   if (!argv[0])
@@ -113,6 +112,18 @@ noreturn void external_command(char **argv) {
   if (!index(argv[0], '/') && path) {
     /* TODO: For all paths in PATH construct an absolute path and execve it. */
 #ifdef STUDENT
+
+    size_t l;
+    while ((l = strcspn(path, ":")) > 0)          /* do untill we don't have more paths in PATH */
+    {
+      char *candidate = strndup(path, l);         /* copy the first potential path (it allocates memory itself) */
+      strapp(&candidate, "/");                    /* add '/' between path and command name (allocates itself) */
+      strapp(&candidate, argv[0]);                /* add command name to path (allocates itself) */
+      path += (l + 1);                            /* move to the next candidate path */
+      (void)execve(candidate, argv, environ);     /* try to execve */
+      free(candidate);                            /* free the allocated memory if execve fails */
+    }
+
 #endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);

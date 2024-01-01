@@ -13,8 +13,14 @@ static void sigint_handler(int sig) {
   (void)sig;
 }
 
-/* Rewrite closed file descriptors to -1,
- * to make sure we don't attempt do close them twice. */
+/* DESCRIPTION:
+ * Rewrite closed file descriptors to -1,
+ * to make sure we don't attempt do close them twice.
+ * INPUT:
+ * int *fdp - file descriptor
+ * OUTPUT:
+ * none */
+
 static void MaybeClose(int *fdp) {
   if (*fdp < 0)
     return;
@@ -22,26 +28,71 @@ static void MaybeClose(int *fdp) {
   *fdp = -1;
 }
 
-/* Consume all tokens related to redirection operators.
- * Put opened file descriptors into inputp & output respectively. */
+/* DESCRIPTION:
+ * Consume all tokens related to redirection operators.
+ * Put opened file descriptors into inputp & output respectively.
+ * INPUT:
+ * token_t *token - array of tokens
+ * int ntokens - length of array
+ * int *inputp - input file descriptor
+ * int *outputp - output file descriptor
+ * OUTPUT:
+ * static int - number of tokens without redirection */
+
 static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   token_t mode = NULL; /* T_INPUT, T_OUTPUT or NULL */
   int n = 0;           /* number of tokens after redirections are removed */
 
-  for (int i = 0; i < ntokens; i++) {
+  for (int i = 0; i < ntokens; i++)
+  {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
+
+    if (token[i] == T_INPUT)
+    {
+      mode = T_INPUT;
+
+      MaybeClose(inputp);
+      *inputp = Open(token[i+1], O_RDONLY, 0);
+
+      token[i] = T_NULL;
+      token[i+1] = T_NULL;
+    }
+    else if (token[i] == T_OUTPUT)
+    {
+      mode = T_OUTPUT;
+
+      MaybeClose(outputp);
+      /* O_CREAT - create file if it does not exist 
+       * O_TRUNC - if file exists, truncate it to 0 bytes aka overwrite data */
+      *outputp = Open(token[i+1], O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+
+      token[i] = T_NULL;
+      token[i+1] = T_NULL;
+    }
+    else if (mode == NULL) /* redirections can be only on the end of "stage", so we count only while mode == NULL */
+      n++;
+
     (void)mode;
     (void)MaybeClose;
 #endif /* !STUDENT */
   }
 
-  token[n] = NULL;
+  token[n] = NULL; //
   return n;
 }
 
-/* Execute internal command within shell's process or execute external command
- * in a subprocess. External command can be run in the background. */
+/* DESCRIPTION:
+ * Execute internal command within shell's process or execute internal/external command
+ * in a subprocess.
+ * We assume that it is a single command, not a pipeline
+ * INPUT:
+ * token_t *token - array of tokens
+ * int ntokens - length of array
+ * bool bg - foreground (0) or background (1)
+ * OUTPUT:
+ * static int - exitcode */
+
 static int do_job(token_t *token, int ntokens, bool bg) {
   int input = -1, output = -1;
   int exitcode = 0;
@@ -58,14 +109,80 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   /* TODO: Start a subprocess, create a job and monitor it. */
 #ifdef STUDENT
+
+  pid_t pid;
+
+  if ((pid = Fork()) == 0) /* child process */
+  {
+    /* signal handling */
+    Sigprocmask(SIG_SETMASK, &mask, NULL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGINT, SIG_DFL);
+    if (bg)
+    {
+      Signal(SIGTTIN, SIG_DFL);
+      Signal(SIGTTOU, SIG_DFL);
+    }
+
+    /* set process group id */
+    pid_t pgid = getpid();
+    setpgid(pgid, pgid);
+
+    if(!bg)
+      setfgpgrp(pgid);
+
+    /* file descriptors and execve */
+    if (input != -1)
+    {
+      Dup2(input, 0);
+      Close(input);
+    }
+    if (output != -1)
+    {
+      Dup2(output, 1);
+      Close(output);
+    }
+
+    if ((exitcode = builtin_command(token)) >= 0) /* cat & (???)*/
+      return exitcode;
+
+    external_command(token);
+  }
+  else /* parent process */
+  {
+    setpgid(pid, pid);  /* just to be sure */
+    MaybeClose(&input);
+    MaybeClose(&output);
+
+    int j = addjob(pid, bg);
+    addproc(j, pid, token);
+
+    if (!bg)
+      exitcode = monitorjob(&mask);
+    else
+      msg("[%d] running '%s'\n", j, jobcmd(j));
+  }
+
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
   return exitcode;
 }
 
-/* Start internal or external command in a subprocess that belongs to pipeline.
- * All subprocesses in pipeline must belong to the same process group. */
+/* DESCRIPTION:
+ * Start internal or external command in a subprocess that belongs to pipeline.
+ * All subprocesses in pipeline must belong to the same process group.
+ * INPUT:
+ * pid_t pgid - job's process group ID
+ * sigset_t *mask
+ * int input - input fd
+ * int output - output fd
+ * token_t *token - array of tokens
+ * int ntokens - length of tokens
+ * bool bg - foreground (0) or background (1)
+ * OUTPUT:
+ * static pid_t - pid of process in pipeline */
+
 static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
                       token_t *token, int ntokens, bool bg) {
   ntokens = do_redir(token, ntokens, &input, &output);
@@ -76,10 +193,61 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   /* TODO: Start a subprocess and make sure it's moved to a process group. */
   pid_t pid = Fork();
 #ifdef STUDENT
+
+  if (pid == 0) /* child process */
+  {
+    /* signal handling */
+    Sigprocmask(SIG_SETMASK, mask, NULL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGINT, SIG_DFL);
+    if (bg)
+    {
+      Signal(SIGTTIN, SIG_DFL);
+      Signal(SIGTTOU, SIG_DFL);
+    }
+
+    /* set process group id - if it's first process setpgid(0,0) makes new process group */
+    setpgid(0, pgid);
+
+    /* file descriptors */
+    if (input != -1)
+    {
+      Dup2(input, 0);
+      Close(input);
+    }
+    if (output != -1)
+    {
+      Dup2(output, 1);
+      Close(output);
+    }
+
+    /* option 1: internal command */
+    int exitcode = -1;
+    if ((exitcode = builtin_command(token)) >= 0)
+      exit(exitcode);
+
+    /* option 2: external command */
+    external_command(token);
+  }
+  else /* parent process */
+  {
+    setpgid(pid, pgid);  /* just to be sure */
+    MaybeClose(&input);
+    MaybeClose(&output);
+  }
+
 #endif /* !STUDENT */
 
   return pid;
 }
+
+/* DESCRIPTION:
+ * Connect processes in pipeline
+ * INPUT:
+ * int *readp - input end
+ * int *writep - output end
+ * OUTPUT:
+ * none */
 
 static void mkpipe(int *readp, int *writep) {
   int fds[2];
@@ -90,8 +258,16 @@ static void mkpipe(int *readp, int *writep) {
   *writep = fds[1];
 }
 
-/* Pipeline execution creates a multiprocess job. Both internal and external
- * commands are executed in subprocesses. */
+/* DESCRIPTION:
+ * Pipeline execution creates a multiprocess job. Both internal and external
+ * commands are executed in subprocesses.
+ * INPUT:
+ * token_t *token - array of tokens
+ * int ntokens - length of array
+ * bool bg - foreground (0) or background (1)
+ * OUTPUT:
+ * static int - exitcode */
+
 static int do_pipeline(token_t *token, int ntokens, bool bg) {
   pid_t pid, pgid = 0;
   int job = -1;
@@ -107,6 +283,48 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
+
+  int nstage = 0;
+  int start_stage = 0;
+  for (int i = 0; i < ntokens; i++)
+  {
+    if (token[i] == T_PIPE) /* first and middle processes */
+    {        
+      /* make process */
+      pid = do_stage(pgid, &mask, input, output, token + start_stage, nstage, bg);
+      if (job == -1) /* if first process */
+      {
+        pgid = pid;
+        job = addjob(pgid, bg);
+      }
+      addproc(job, pid, token + start_stage);
+
+      /* make next pipe */
+      input = next_input;
+      mkpipe(&next_input, &output);
+      nstage = 0;
+      start_stage = i+1; /* new beginning of process */
+    }
+    else if (i == ntokens-1 || (i == ntokens-2 && token[ntokens-1] == T_BGJOB)) /* if last process */
+    {
+      /* close pipe that we opened in previous move */
+      MaybeClose(&output);
+      MaybeClose(&next_input);
+      output = -1;
+
+      /* make process */
+      pid = do_stage(pgid, &mask, input, output, token + start_stage, nstage+1, bg);
+      addproc(job, pid, token + start_stage);
+    }
+    else
+    {
+      nstage++; /* count tokens in current part of pipeline */
+    }
+  }
+
+  if (!bg)
+    exitcode = monitorjob(&mask);
+
   (void)input;
   (void)job;
   (void)pid;
@@ -117,6 +335,14 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   Sigprocmask(SIG_SETMASK, &mask, NULL);
   return exitcode;
 }
+
+/* DESCRIPTION:
+ * Check if job is a pipeline
+ * INPUT:
+ * token_t *token - array of tokens
+ * int ntokens - length of array
+ * OUTPUT:
+ * bool - is pipeline (1) or not (0) */
 
 static bool is_pipeline(token_t *token, int ntokens) {
   for (int i = 0; i < ntokens; i++)
@@ -150,7 +376,8 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  write(STDOUT_FILENO, prompt, strlen(prompt));
+  ssize_t rc = write(STDOUT_FILENO, prompt, strlen(prompt));
+  (void) rc;
 
   line[0] = '\0';
 
