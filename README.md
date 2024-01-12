@@ -1,1 +1,11 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/fGmHT79S)
+## Simple Unix Shell
+Technology: C
+Type of project: fill-in-the-gaps
+
+### Rules of project
+Only the code inside the "STUDENT" zones is written from scratch by me. The professor provided everything else.
+
+### How to use it
+make - compile the project
+make format - format all .c files
+make test - run tests given by the professor (it requires that the code outside the "STUDENT" zones is unmodified, even adding comments is forbidden)
