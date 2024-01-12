@@ -1,6 +1,6 @@
 ## Simple Unix Shell
 Technology: C\
-Type of project: fill-in-the-gaps\
+Type of project: fill-in-the-gaps
 
 ### Rules of project
 Only the code inside the "STUDENT" zones is written from scratch by me. The professor provided everything else.
